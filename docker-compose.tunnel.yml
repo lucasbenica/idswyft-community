@@ -1,0 +1,8 @@
+services:
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://frontend:8080
+    depends_on:
+      frontend:
+        condition: service_started

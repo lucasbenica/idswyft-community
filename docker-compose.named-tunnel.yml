@@ -1,0 +1,8 @@
+services:
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?Defina CLOUDFLARE_TUNNEL_TOKEN no arquivo .env antes de iniciar o túnel fixo}
+    depends_on:
+      frontend:
+        condition: service_started
