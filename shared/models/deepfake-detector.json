@@ -1,0 +1,18 @@
+{
+  "source": "prithivMLmods/Deep-Fake-Detector-v2-Model",
+  "inputSize": 224,
+  "mean": [
+    0.5,
+    0.5,
+    0.5
+  ],
+  "std": [
+    0.5,
+    0.5,
+    0.5
+  ],
+  "labels": [
+    "real",
+    "fake"
+  ]
+}

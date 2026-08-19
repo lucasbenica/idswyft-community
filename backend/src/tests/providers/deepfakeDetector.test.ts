@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import sharp from 'sharp';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filenameDir = path.dirname(fileURLToPath(import.meta.url));
 
 vi.mock('@/utils/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -89,5 +94,48 @@ describe('OnnxDeepfakeDetector', () => {
       const detector = createDeepfakeDetector();
       expect(detector).toBeInstanceOf(OnnxDeepfakeDetector);
     });
+  });
+});
+
+// ─── Real model integration ──────────────────────────────────
+//
+// Skipped when shared/models/deepfake-detector.onnx hasn't been generated —
+// `python scripts/models/export-deepfake-detector.py` produces it. When the
+// model is there, this proves the exported graph actually runs under
+// onnxruntime-node and that the sidecar descriptor drives preprocessing.
+
+const MODEL_PATH = path.resolve(__filenameDir, '../../../../shared/models/deepfake-detector.onnx');
+const modelPresent = fs.existsSync(MODEL_PATH);
+
+describe.skipIf(!modelPresent)('OnnxDeepfakeDetector with the exported model', () => {
+  it('loads the model and scores a face crop', async () => {
+    const detector = new OnnxDeepfakeDetector(MODEL_PATH);
+
+    const w = 224, h = 224;
+    const rawPixels = Buffer.alloc(w * h * 3);
+    for (let i = 0; i < w * h; i++) {
+      rawPixels[i * 3] = 180 + (i % 40);
+      rawPixels[i * 3 + 1] = 140 + (i % 30);
+      rawPixels[i * 3 + 2] = 120 + (i % 20);
+    }
+    const face = await sharp(rawPixels, { raw: { width: w, height: h, channels: 3 } })
+      .jpeg({ quality: 92 })
+      .toBuffer();
+
+    const result = await detector.detect(face);
+
+    expect(detector.isAvailable()).toBe(true);
+    expect(result.realProbability + result.fakeProbability).toBeCloseTo(1, 5);
+    // A neutral 0.5/0.5 is what the class returns when inference did not run.
+    expect(result.realProbability).not.toBe(0.5);
+    expect(result.isReal).toBe(result.realProbability > 0.5);
+  }, 60_000);
+
+  it('reads the sidecar descriptor shipped with the model', () => {
+    const descriptor = JSON.parse(fs.readFileSync(MODEL_PATH.replace(/\.onnx$/, '.json'), 'utf8'));
+    expect(descriptor.labels).toHaveLength(2);
+    expect(new Set(descriptor.labels)).toEqual(new Set(['real', 'fake']));
+    expect(descriptor.mean).toHaveLength(3);
+    expect(descriptor.inputSize).toBeGreaterThan(0);
   });
 });
